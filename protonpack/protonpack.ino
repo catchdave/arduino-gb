@@ -2,7 +2,7 @@
 #include <TimedAction.h>
 
 // Shift Register config
-#define NUM_REGISTERS 3 // how many registers are in the chain
+#define NUM_REGISTERS 4 // how many registers are in the chain
 int latchPin = 8;
 int clockPin = 12;
 int dataPin = 11;
@@ -22,6 +22,10 @@ int boosterDir = 1;
 // Cyclotron config
 #define CYCLOTRON_FIRST_PIN 24
 #define CYCLOTRON_LAST_PIN 27
+#define CYCLOTRON_DELAY_NORMAL 180
+#define CYCLOTRON_DELAY_MIN 60
+// Cyclotron variables
+int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 
 // N-Filter Config
 #define NFILTER_FIRST_PIN 15
@@ -48,6 +52,7 @@ TimedAction normal_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterNormal);
 TimedAction normal_nfilter = TimedAction(NFILTER_DELAY_NORMAL, nfilterNormal);
 TimedAction overload_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterOverloaded);
 TimedAction overload_nfilter = TimedAction(NFILTER_DELAY_OVERLOADED, nfilterOverloaded);
+TimedAction normal_cyclotron = TimedAction(CYCLOTRON_DELAY_NORMAL, cyclotronNormal);
 
 void setup()
 {
@@ -105,7 +110,8 @@ void loop()
   overload_nfilter.check();
   normal_booster.check();
   normal_nfilter.check();
-  
+  normal_cyclotron.check();
+
   // Send LED changes
   if (shifter.isUpdateNeeded()) {
     shifter.write();
@@ -230,6 +236,21 @@ void nfilterClear()
   for (int i = NFILTER_FIRST_PIN; i <= NFILTER_LAST_PIN; i++) {
      shifter.setPin(i, LOW);
   }
+}
+
+/**
+ * Cyclotron
+ */
+
+void cyclotronNormal()
+{
+  shifter.setPin(curCyclotronPin++, LOW);
+
+  if (curCyclotronPin > CYCLOTRON_LAST_PIN) {
+    curCyclotronPin = CYCLOTRON_FIRST_PIN;
+  }
+  shifter.setPin(curCyclotronPin, HIGH);
+  
 }
 
 /*
