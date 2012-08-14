@@ -6,7 +6,7 @@
 int latchPin = 8;
 int clockPin = 12;
 int dataPin = 11;
-Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS); 
+Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS);
 
 // Booster config
 #define BOOSTER_FIRST_PIN 0
@@ -54,23 +54,23 @@ void setup()
   shifter.clear(); //set all pins on the shift register chain to LOW
   shifter.write();
   pinMode(switchOne, INPUT);
-  
+
   overload_booster.disable();
   overload_nfilter.disable();
 }
 
 // Main loop
 void loop()
-{ 
+{
   // Check firing
   isFiring = (digitalRead(switchOne) == HIGH);
   if (!isFiring) {
-   firingStart = 0; 
+   firingStart = 0;
   }
   else if (firingStart == 0) { // We just started firing
-    firingStart = millis();   
+    firingStart = millis();
   }
-  
+
   // Overload start
   if (!stateOverloaded && isFiring && (millis() - firingStart) > TIME_TO_OVERLOAD) {
     stateOverloaded = true;
@@ -78,7 +78,7 @@ void loop()
     resetAllLights();
     normal_booster.disable();
     normal_nfilter.disable();
-    
+
     overload_booster.enable();
     overload_nfilter.enable();
   }
@@ -92,23 +92,23 @@ void loop()
   if (stateOverloaded && !isFiring && (millis() - overloadedStart) > TIME_TO_COOLDOWN) {
     resetAllLights();
     stateOverloaded = false;
-    
+
     normal_booster.enable();
     normal_nfilter.enable();
-    
+
     overload_booster.disable();
-    overload_nfilter.disable();    
+    overload_nfilter.disable();
   }
-  
-  // Exexucte events
+
+  // Execute events
   overload_booster.check();
-  overload_nfilter.check();  
+  overload_nfilter.check();
   normal_booster.check();
   normal_nfilter.check();
   
   // Send LED changes
   if (shifter.isUpdateNeeded()) {
-    shifter.write(); 
+    shifter.write();
   }
 }
 
@@ -117,7 +117,7 @@ void resetAllLights()
   curBoosterPin = BOOSTER_FIRST_PIN;
   boosterDir = 1;
   boosterClear();
-  
+
   curNfilterPin = NFILTER_FIRST_PIN;
   nfilterClear();
 }
@@ -151,7 +151,7 @@ void boosterNormal()
 void boosterOverloaded()
 {
   int atEnd = false;
-  
+
   if (curBoosterPin >= BOOSTER_LAST_PIN) {
     boosterDir = -1;
     atEnd = true;
@@ -161,19 +161,19 @@ void boosterOverloaded()
      atEnd = true;
   }
   else {
-    atEnd = false; 
+    atEnd = false;
   }
-  
+
   boosterClear();
   shifter.setPin(curBoosterPin, HIGH);
   curBoosterPin = curBoosterPin + boosterDir;
   if (!atEnd) {
     shifter.setPin(curBoosterPin, HIGH);
   }
-  
+
   // Flash twice
  // boosterFlash(200);
-  //boosterFlash(200);  
+  //boosterFlash(200);
 }
 
 void boosterClear()
@@ -189,11 +189,11 @@ void boosterClear()
 void nfilterNormal()
 {
   shifter.setPin(curNfilterPin, LOW);
-  
-  // 
+
+  //
   if (isFiring) {
     normal_nfilter.setInterval(NFILTER_DELAY_FIRING);
-    
+
     curNfilterPin--;
     if (curNfilterPin < NFILTER_FIRST_PIN) {
       curNfilterPin = NFILTER_LAST_PIN;
@@ -201,13 +201,13 @@ void nfilterNormal()
   }
   else {
     normal_nfilter.setInterval(NFILTER_DELAY_NORMAL);
-    
+
     curNfilterPin++;
     if (curNfilterPin > NFILTER_LAST_PIN) {
       curNfilterPin = NFILTER_FIRST_PIN;
     }
   }
-  
+
   shifter.setPin(curNfilterPin, HIGH);
 }
 
@@ -234,7 +234,7 @@ void nfilterClear()
 
 /*
 void loop()
-{ 
+{
   isFiring = (digitalRead(switchOne) == HIGH);
 
   // If we've reached our min, then start overload sequence
@@ -253,7 +253,7 @@ void loop()
   }
   else {
      normalBooster();
-     
+
      // Should we start overloaded state?
     if (!overloaded && curBoosterDelay <= BOOSTER_DELAY_MIN) {
       overloaded = true;
@@ -271,7 +271,6 @@ void boosterFlash(int flashDelay)
   delay(flashDelay);
   shifter.clear();
   shifter.write();
-  delay(flashDelay); 
+  delay(flashDelay);
 }
 */
-
