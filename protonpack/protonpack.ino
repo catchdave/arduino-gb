@@ -31,7 +31,7 @@ int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 #define NFILTER_FIRST_PIN 15
 #define NFILTER_LAST_PIN 23
 #define NFILTER_DELAY_NORMAL 100
-#define NFILTER_DELAY_OVERLOADED 1000
+#define NFILTER_DELAY_OVERLOADED 250
 #define NFILTER_DELAY_FIRING 30
 // N-Filter variables
 int curNfilterPin = NFILTER_FIRST_PIN;
@@ -218,16 +218,15 @@ void nfilterNormal()
 }
 
 
+int flashState = 0;
 void nfilterOverloaded()
 {
-  int flashState = 0;
-  
   for (int i = NFILTER_FIRST_PIN; i <= NFILTER_LAST_PIN; i++) {
-     shifter.setPin(i, ((flashState % 2 == 0) && flashState < 8) ? HIGH : LOW);
+     shifter.setPin(i, (flashState == 0 || flashState == 2) ? HIGH : LOW);
   }
-  
-  if (flashState++ > 8) {
-    flashState = 0; 
+
+  if (flashState++ > 6) {
+    flashState = 0;
   }
 }
 
