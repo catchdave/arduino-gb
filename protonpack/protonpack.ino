@@ -74,14 +74,18 @@ void loop()
   // Overload start
   if (!stateOverloaded && isFiring && (millis() - firingStart) > TIME_TO_OVERLOAD) {
     stateOverloaded = true;
-    overloadedStart = millis();
-    
+
     resetAllLights();
     normal_booster.disable();
     normal_nfilter.disable();
     
     overload_booster.enable();
     overload_nfilter.enable();
+  }
+
+  // Update overload start time, if still firing
+  if (stateOverloaded && isFiring) {
+    overloadedStart = millis();
   }
 
   // Overload endend
