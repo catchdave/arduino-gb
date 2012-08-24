@@ -194,10 +194,6 @@ void boosterOverloaded()
   if (!atEnd) {
     shifter.setPin(curBoosterPin, HIGH);
   }
-
-  // Flash twice
- // boosterFlash(200);
-  //boosterFlash(200);
 }
 
 void boosterClear()
