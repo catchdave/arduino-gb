@@ -19,14 +19,6 @@ int curBoosterPin = BOOSTER_FIRST_PIN;
 int curBoosterDelay = BOOSTER_DELAY_NORMAL;
 int boosterDir = 1;
 
-// Cyclotron config
-#define CYCLOTRON_FIRST_PIN 24
-#define CYCLOTRON_LAST_PIN 27
-#define CYCLOTRON_DELAY_NORMAL 180
-#define CYCLOTRON_DELAY_MIN 60
-// Cyclotron variables
-int curCyclotronPin = CYCLOTRON_FIRST_PIN;
-
 // N-Filter Config
 #define NFILTER_FIRST_PIN 15
 #define NFILTER_LAST_PIN 23
@@ -35,6 +27,27 @@ int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 #define NFILTER_DELAY_FIRING 30
 // N-Filter variables
 int curNfilterPin = NFILTER_FIRST_PIN;
+
+// Cyclotron config
+#define CYCLOTRON_FIRST_PIN 24
+#define CYCLOTRON_LAST_PIN 27
+#define CYCLOTRON_DELAY_NORMAL 350
+#define CYCLOTRON_DELAY_MIN 180
+// Cyclotron variables
+int curCyclotronPin = CYCLOTRON_FIRST_PIN;
+
+// Gun Bargraph
+#define BARGRAPH_FIRST_PIN 28
+#define BARGRAPH_LAST_PIN 31
+#define BARGRAPH_LAST_PIN_REAL 47
+#define BARGRAPH_DELAY_NORMAL_UP 150
+#define BARGRAPH_DELAY_NORMAL_DOWN 250
+#define BARGRAPH_GLOW_WAIT 3000
+
+// Cyclotron variables
+int curBargraphPin = BARGRAPH_FIRST_PIN;
+boolean bargraphUp = true;
+boolean bargraphWaiting = false;
 
 // General config
 #define TIME_TO_OVERLOAD 6000UL
@@ -47,12 +60,16 @@ unsigned long overloadedStart = 0;
 unsigned long firingStart = 0;
 boolean stateOverloaded = false;
 
-// Timed action
+// Timed action, normal
 TimedAction normal_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterNormal);
 TimedAction normal_nfilter = TimedAction(NFILTER_DELAY_NORMAL, nfilterNormal);
+TimedAction normal_cyclotron = TimedAction(CYCLOTRON_DELAY_NORMAL, cyclotronNormal);
+TimedAction normal_bargraph = TimedAction(BARGRAPH_DELAY_NORMAL_UP, bargraphNormal);
+
+// Timed action overload
 TimedAction overload_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterOverloaded);
 TimedAction overload_nfilter = TimedAction(NFILTER_DELAY_OVERLOADED, nfilterOverloaded);
-TimedAction normal_cyclotron = TimedAction(CYCLOTRON_DELAY_NORMAL, cyclotronNormal);
+
 
 void setup()
 {
@@ -111,6 +128,7 @@ void loop()
   normal_booster.check();
   normal_nfilter.check();
   normal_cyclotron.check();
+  normal_bargraph.check();
 
   // Send LED changes
   if (shifter.isUpdateNeeded()) {
@@ -237,10 +255,9 @@ void nfilterClear()
   }
 }
 
-/**
- * Cyclotron
- */
-
+/*********************
+ * Cyclotron Functions *
+ *********************/
 void cyclotronNormal()
 {
   shifter.setPin(curCyclotronPin++, LOW);
@@ -249,5 +266,40 @@ void cyclotronNormal()
     curCyclotronPin = CYCLOTRON_FIRST_PIN;
   }
   shifter.setPin(curCyclotronPin, HIGH);
-  
 }
+
+/*********************
+ * Bargraph Functions *
+ *********************/
+void bargraphNormal()
+{
+  // Rising glow complete, wait before we go down
+  if (curBargraphPin > BARGRAPH_LAST_PIN) {
+    bargraphUp = false;
+    curBargraphPin = BARGRAPH_LAST_PIN;
+    bargraphWaiting = true;
+
+    normal_bargraph.setInterval(BARGRAPH_GLOW_WAIT);
+    return;
+  }
+  
+  // Reset interval when returning from waiting
+  if (bargraphWaiting) {
+    bargraphWaiting = false;
+    normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_DOWN);
+  }
+  
+  if (curBargraphPin <= BARGRAPH_FIRST_PIN) {
+    bargraphUp = true;
+    curBargraphPin = BARGRAPH_FIRST_PIN;
+    normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_UP);
+  }
+
+  if (bargraphUp) {
+    shifter.setPin(curBargraphPin++, HIGH);
+  }
+  else {
+    shifter.setPin(curBargraphPin--, LOW);
+  }
+}
+
