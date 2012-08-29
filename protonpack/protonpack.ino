@@ -1,11 +1,15 @@
 #include <Shifter.h>
 #include <TimedAction.h>
+#include "WaveUtil.h"
+#include "WaveHC.h"
 
+WaveHC wave(Serial);  // This is the only wave (audio) object, since we will only play one at a time
 
 // Pin Definitions
 int latchPin = 8;
-int clockPin = 12;
-int dataPin = 11;
+int clockPin = 7; // used to be 12
+int dataPin = 9; // used to be 11
+int triggerSwitch = A5;
 
 // Shift Register config
 #define NUM_REGISTERS 7 // how many registers are in the chain
@@ -58,7 +62,6 @@ int bargraphDir = 1;
 // General config
 #define TIME_TO_OVERLOAD 6000UL
 #define TIME_TO_COOLDOWN 4000UL
-int switchOne = 2;
 
 // State variables
 int isFiring = false;
@@ -82,17 +85,28 @@ void setup()
 {
   shifter.clear(); //set all pins on the shift register chain to LOW
   shifter.write();
-  pinMode(switchOne, INPUT);
+  pinMode(triggerSwitch, INPUT);
 
   overload_booster.disable();
   overload_nfilter.disable();
+  
+ // putstring_nl("Initialising");
+  //wave.setup();
+  Serial.begin(9600);
 }
 
 // Main loop
 void loop()
 {
+  /*
+  if (!wave.isplaying) {
+    wave.playfile("theme1.wav");
+  }
+  return;
+  */
+  
   // Check firing
-  isFiring = (digitalRead(switchOne) == HIGH);
+  isFiring = (digitalRead(triggerSwitch) == HIGH);
   if (!isFiring) {
    firingStart = 0;
   }
