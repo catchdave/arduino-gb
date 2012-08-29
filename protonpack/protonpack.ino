@@ -47,21 +47,24 @@ int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 #define BARGRAPH_FIRST_PIN 28
 #define BARGRAPH_LAST_PIN 47
 #define BARGRAPH_MIDDLE_PIN 38
-#define BARGRAPH_DELAY_NORMAL_UP 130
-#define BARGRAPH_DELAY_NORMAL_DOWN 200
+#define BARGRAPH_DELAY_NORMAL_UP 400
+#define BARGRAPH_DELAY_NORMAL_DOWN 220
 #define BARGRAPH_DELAY_OVERLOADED 70
+#define BARGRAPH_DELAY_CYCLE 70
 #define BARGRAPH_GLOW_WAIT 2000
-
-// Cyclotron variables
+// Bargraph variables
 int primaryBargraphPin = BARGRAPH_FIRST_PIN;
 int secondaryBargraphPin = BARGRAPH_MIDDLE_PIN;
 boolean bargraphUp = true;
 boolean bargraphWaiting = false;
 int bargraphDir = 1;
 
+
 // General config
 #define TIME_TO_OVERLOAD 6000UL
 #define TIME_TO_COOLDOWN 4000UL
+#define MAX_LEVELS 20
+int curLevel = 0;
 
 // State variables
 int isFiring = false;
@@ -73,7 +76,8 @@ boolean stateOverloaded = false;
 TimedAction normal_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterNormal);
 TimedAction normal_nfilter = TimedAction(NFILTER_DELAY_NORMAL, nfilterNormal);
 TimedAction normal_cyclotron = TimedAction(CYCLOTRON_DELAY_NORMAL, cyclotronNormal);
-TimedAction normal_bargraph = TimedAction(BARGRAPH_DELAY_NORMAL_UP, bargraphNormal);
+TimedAction normal_bargraph = TimedAction(BARGRAPH_DELAY_NORMAL_DOWN, bargraphNormal);
+TimedAction normal_bargraph_cycle = TimedAction(BARGRAPH_DELAY_CYCLE, bargraphCycle);
 
 // Timed action overload
 TimedAction overload_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterOverloaded);
@@ -89,6 +93,8 @@ void setup()
 
   overload_booster.disable();
   overload_nfilter.disable();
+  overload_bargraph.disable();
+  normal_bargraph_cycle.disable();
   
  // putstring_nl("Initialising");
   //wave.setup();
@@ -105,6 +111,7 @@ void loop()
   return;
   */
   
+  
   // Check firing
   isFiring = (digitalRead(triggerSwitch) == HIGH);
   if (!isFiring) {
@@ -115,17 +122,18 @@ void loop()
   }
 
   // Overload start
-  if (!stateOverloaded && isFiring && (millis() - firingStart) > TIME_TO_OVERLOAD) {
+  if (!stateOverloaded && isFiring && curLevel <= 0) {
     stateOverloaded = true;
 
     resetAllLights(true);
     normal_booster.disable();
     normal_nfilter.disable();
     normal_bargraph.disable();
+    normal_bargraph_cycle.disable();
 
     overload_booster.enable();
     overload_nfilter.enable();
-    overload_bargraph.enable();  
+    overload_bargraph.enable();
   }
 
   // Update overload start time, if still firing
@@ -155,6 +163,7 @@ void loop()
   normal_nfilter.check();
   normal_cyclotron.check();
   normal_bargraph.check();
+  normal_bargraph_cycle.check();
 
   // Send LED changes
   if (shifter.isUpdateNeeded()) {
@@ -295,45 +304,49 @@ void cyclotronNormal()
 /*********************
  * Bargraph Functions *
  *********************/
+int bargraphCyclePin = BARGRAPH_LAST_PIN;
 void bargraphNormal()
 {
-  
-  
-  
-  
-  // Rising glow complete, wait before we go down
-  if (primaryBargraphPin > BARGRAPH_LAST_PIN) {
-    bargraphUp = false;
-    primaryBargraphPin = BARGRAPH_LAST_PIN;
-    bargraphWaiting = true;
-
-    normal_bargraph.setInterval(BARGRAPH_GLOW_WAIT);
-    return;
-  }
-  
-  // Reset interval when returning from waiting
-  if (bargraphWaiting) {
-    bargraphWaiting = false;
+  if (isFiring) {
+    
+    normal_bargraph_cycle.disable();
+    bargraphCyclePin = 0;
+    
+    if (--curLevel < 0) {
+       curLevel = 0; 
+    }
     normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_DOWN);
   }
-  
-  if (primaryBargraphPin <= BARGRAPH_FIRST_PIN) {
-    bargraphUp = true;
-    primaryBargraphPin = BARGRAPH_FIRST_PIN;
+  else if(!stateOverloaded) {
+    if (++curLevel > MAX_LEVELS) {
+       curLevel = MAX_LEVELS;
+       normal_bargraph_cycle.enable();
+    }
     normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_UP);
   }
 
-  if (bargraphUp) {
-    shifter.setPin(primaryBargraphPin++, HIGH);
-  }
-  else {
-    shifter.setPin(primaryBargraphPin--, LOW);
+  for (int i = BARGRAPH_FIRST_PIN; i <= BARGRAPH_LAST_PIN; i++) {
+    shifter.setPin(i, ((i < BARGRAPH_FIRST_PIN + curLevel) && i != bargraphCyclePin) ? HIGH : LOW);
   }
 }
 
-void bargraphFiring()
+void bargraphCycle()
 {
+  int revertPin;
   
+  if (--bargraphCyclePin < BARGRAPH_FIRST_PIN) {
+    bargraphCyclePin = BARGRAPH_LAST_PIN;
+    revertPin = BARGRAPH_FIRST_PIN;
+  }
+  else {
+    revertPin = bargraphCyclePin + 1;
+  }
+  
+  if (revertPin < (BARGRAPH_FIRST_PIN + curLevel)) {
+     shifter.setPin(revertPin,  HIGH);
+  }
+  
+  shifter.setPin(bargraphCyclePin,  LOW);
 }
 
 void bargraphOverloaded()
@@ -372,3 +385,51 @@ void bargraphReset(boolean overload)
      shifter.setPin(i, LOW);
   }
 }
+
+/*
+
+if (isFiring) {
+    float remaining;
+  int parts;
+   remaining = TIME_TO_OVERLOAD - (millis() - firingStart);
+   if (remaining > 0) {
+     parts = (int) (20.0 * remaining / TIME_TO_OVERLOAD);
+   }
+   else {
+     parts = 0; 
+   }
+  }
+  
+  
+  void bargraphNormalGlow()
+{
+  // Rising glow complete, wait before we go down
+  if (primaryBargraphPin > BARGRAPH_LAST_PIN) {
+    bargraphUp = false;
+    primaryBargraphPin = BARGRAPH_LAST_PIN;
+    bargraphWaiting = true;
+
+    normal_bargraph.setInterval(BARGRAPH_GLOW_WAIT);
+    return;
+  }
+  
+  // Reset interval when returning from waiting
+  if (bargraphWaiting) {
+    bargraphWaiting = false;
+    normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_DOWN);
+  }
+  
+  if (primaryBargraphPin <= BARGRAPH_FIRST_PIN) {
+    bargraphUp = true;
+    primaryBargraphPin = BARGRAPH_FIRST_PIN;
+    normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_UP);
+  }
+
+  if (bargraphUp) {
+    shifter.setPin(primaryBargraphPin++, HIGH);
+  }
+  else {
+    shifter.setPin(primaryBargraphPin--, LOW);
+  }
+}
+*/
