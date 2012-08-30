@@ -10,51 +10,51 @@ int dataPin = 9; // used to be 11
 int triggerSwitch = A5;
 
 // General config
-#define TIME_TO_COOLDOWN 4000UL
-#define MAX_LEVELS 20
+const unsigned long TIME_TO_COOLDOWN = 4000;
+const int MAX_LEVELS = 20;
 int curLevel = 0;
 
 // Shift Register config
-#define NUM_REGISTERS 7 // how many registers are in the chain
+const int NUM_REGISTERS = 7; // how many registers are in the chain
 Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS);
 
 // Booster config
-#define BOOSTER_FIRST_PIN 0
-#define BOOSTER_LAST_PIN 14
-#define BOOSTER_DELAY_MIN 10
-#define BOOSTER_DELAY_NORMAL 80
-#define BOOSTER_DELAY_OVERLOADED 80
+const int BOOSTER_FIRST_PIN = 0;
+const int BOOSTER_LAST_PIN = 14;
+const int BOOSTER_DELAY_MIN = 10;
+const int BOOSTER_DELAY_NORMAL = 80;
+const int BOOSTER_DELAY_OVERLOADED = 80;
 // Booster variables
 int curBoosterPin = BOOSTER_FIRST_PIN;
 int curBoosterDelay = BOOSTER_DELAY_NORMAL;
 int boosterDir = 1;
 
 // N-Filter Config
-#define NFILTER_FIRST_PIN 15
-#define NFILTER_LAST_PIN 23
-#define NFILTER_DELAY_NORMAL 100
-#define NFILTER_DELAY_OVERLOADED 250
-#define NFILTER_DELAY_FIRING 30
+const int NFILTER_FIRST_PIN = 15;
+const int NFILTER_LAST_PIN = 23;
+const int NFILTER_DELAY_NORMAL = 100;
+const int NFILTER_DELAY_OVERLOADED = 250;
+const int NFILTER_DELAY_FIRING = 30;
 // N-Filter variables
 int curNfilterPin = NFILTER_FIRST_PIN;
 
 // Cyclotron config
-#define CYCLOTRON_FIRST_PIN 24
-#define CYCLOTRON_LAST_PIN 27
-#define CYCLOTRON_DELAY_NORMAL 350
-#define CYCLOTRON_DELAY_MIN 180
+const int CYCLOTRON_FIRST_PIN = 24;
+const int CYCLOTRON_LAST_PIN = 27;
+const int CYCLOTRON_DELAY_NORMAL = 350;
+const int CYCLOTRON_DELAY_MIN = 180;
 // Cyclotron variables
 int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 
 // Gun Bargraph
-#define BARGRAPH_FIRST_PIN 28
-#define BARGRAPH_LAST_PIN 47
-#define BARGRAPH_MIDDLE_PIN 38
-#define BARGRAPH_DELAY_NORMAL_UP 400
-#define BARGRAPH_DELAY_NORMAL_DOWN 220
-#define BARGRAPH_DELAY_OVERLOADED 70
-#define BARGRAPH_DELAY_CYCLE 70
-#define BARGRAPH_GLOW_WAIT 2000
+const int BARGRAPH_FIRST_PIN = 28;
+const int BARGRAPH_LAST_PIN = 47;
+const int BARGRAPH_MIDDLE_PIN = 38;
+const int BARGRAPH_DELAY_NORMAL_UP = 400;
+const int BARGRAPH_DELAY_NORMAL_DOWN = 220;
+const int BARGRAPH_DELAY_OVERLOADED = 70;
+const int BARGRAPH_DELAY_CYCLE = 70;
+const int BARGRAPH_GLOW_WAIT = 2000;
 // Bargraph variables
 int primaryBargraphPin = BARGRAPH_FIRST_PIN;
 int secondaryBargraphPin = BARGRAPH_MIDDLE_PIN;
