@@ -3,6 +3,9 @@
 #include "WaveUtil.h"
 #include "WaveHC.h"
 
+#define uint unsigned int
+#define ulong unsigned long
+
 // Pin Definitions
 int latchPin = 8;
 int clockPin = 7; // used to be 12
@@ -10,9 +13,16 @@ int dataPin = 9; // used to be 11
 int triggerSwitch = A5;
 
 // General config
-const unsigned long TIME_TO_COOLDOWN = 4000;
+const ulong TIME_TO_COOLDOWN = 4000UL;
 const int MAX_LEVELS = 20;
 int curLevel = 0;
+
+// State variables
+boolean isFiring = false;
+boolean stateOverloaded = false;
+ulong overloadedStart = 0;
+ulong firingStart = 0;
+boolean initialised = false;
 
 // Shift Register config
 const int NUM_REGISTERS = 7; // how many registers are in the chain
@@ -21,12 +31,13 @@ Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS);
 // Booster config
 const int BOOSTER_FIRST_PIN = 0;
 const int BOOSTER_LAST_PIN = 14;
-const int BOOSTER_DELAY_MIN = 10;
-const int BOOSTER_DELAY_NORMAL = 80;
+const int BOOSTER_DELAY_MIN = 5;
+const int BOOSTER_LEVELS[MAX_LEVELS+1] = {10,10,10,15,15,15,20,20,20,20,20,20,30,30,30,30,40,40,40,40,80};
+const int BOOSTER_DELAY_INIT = BOOSTER_LEVELS[19];
 const int BOOSTER_DELAY_OVERLOADED = 80;
 // Booster variables
 int curBoosterPin = BOOSTER_FIRST_PIN;
-int curBoosterDelay = BOOSTER_DELAY_NORMAL;
+int curBoosterDelay = BOOSTER_DELAY_INIT;
 int boosterDir = 1;
 
 // N-Filter Config
@@ -37,6 +48,7 @@ const int NFILTER_DELAY_OVERLOADED = 250;
 const int NFILTER_DELAY_FIRING = 30;
 // N-Filter variables
 int curNfilterPin = NFILTER_FIRST_PIN;
+int nFilterFlashState = 0;
 
 // Cyclotron config
 const int CYCLOTRON_FIRST_PIN = 24;
@@ -50,8 +62,8 @@ int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 const int BARGRAPH_FIRST_PIN = 28;
 const int BARGRAPH_LAST_PIN = 47;
 const int BARGRAPH_MIDDLE_PIN = 38;
-const int BARGRAPH_DELAY_NORMAL_UP = 400;
-const int BARGRAPH_DELAY_NORMAL_DOWN = 220;
+const int BARGRAPH_DELAY_NORMAL_UP = 420;
+const int BARGRAPH_DELAY_NORMAL_DOWN = 350;
 const int BARGRAPH_DELAY_OVERLOADED = 70;
 const int BARGRAPH_DELAY_CYCLE = 70;
 const int BARGRAPH_GLOW_WAIT = 2000;
@@ -63,14 +75,8 @@ boolean bargraphUp = true;
 boolean bargraphWaiting = false;
 int bargraphDir = 1;
 
-// State variables
-int isFiring = false;
-unsigned long overloadedStart = 0;
-unsigned long firingStart = 0;
-boolean stateOverloaded = false;
-
 // Timed action, normal
-TimedAction normal_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterNormal);
+TimedAction normal_booster = TimedAction(BOOSTER_DELAY_INIT, boosterNormal);
 TimedAction normal_nfilter = TimedAction(NFILTER_DELAY_NORMAL, nfilterNormal);
 TimedAction normal_cyclotron = TimedAction(CYCLOTRON_DELAY_NORMAL, cyclotronNormal);
 TimedAction normal_bargraph = TimedAction(BARGRAPH_DELAY_NORMAL_DOWN, bargraphNormal);
@@ -92,7 +98,9 @@ void setup()
   overload_booster.disable();
   overload_nfilter.disable();
   overload_bargraph.disable();
-  normal_bargraph_cycle.disable();
+
+  normal_cyclotron.disable(); // enabled when initialised
+  normal_bargraph_cycle.disable(); // enbled when bargraph full
 
   //wave.setup();
   Serial.begin(9600);
@@ -110,7 +118,7 @@ void loop()
 
 
   // Check firing
-  isFiring = (digitalRead(triggerSwitch) == HIGH);
+  isFiring = initialised && (digitalRead(triggerSwitch) == HIGH);
   if (!isFiring) {
    firingStart = 0;
   }
@@ -189,18 +197,11 @@ void boosterNormal()
   if (curBoosterPin > BOOSTER_LAST_PIN) {
     curBoosterPin = BOOSTER_FIRST_PIN;
     boosterClear();
+  }
 
-    // Increase or decrease speed on every new cycle
-    if (isFiring) {
-      curBoosterDelay -= 10;
-      curBoosterDelay = max(curBoosterDelay, BOOSTER_DELAY_MIN);
-    }
-    else {
-      curBoosterDelay += 10;
-      curBoosterDelay = min(curBoosterDelay, BOOSTER_DELAY_NORMAL);
-    }
-
-    normal_booster.setInterval(curBoosterDelay);
+  // Speed is dependant on current level
+  if (initialised) {
+    normal_booster.setInterval(BOOSTER_LEVELS[curLevel]);
   }
 
   shifter.setPin(curBoosterPin++, HIGH);
@@ -208,7 +209,7 @@ void boosterNormal()
 
 void boosterOverloaded()
 {
-  int atEnd = false;
+  int atEnd;
 
   if (curBoosterPin >= BOOSTER_LAST_PIN) {
     boosterDir = -1;
@@ -265,16 +266,14 @@ void nfilterNormal()
   shifter.setPin(curNfilterPin, HIGH);
 }
 
-
-int flashState = 0;
 void nfilterOverloaded()
 {
   for (int i = NFILTER_FIRST_PIN; i <= NFILTER_LAST_PIN; i++) {
-     shifter.setPin(i, (flashState == 0 || flashState == 2) ? HIGH : LOW);
+     shifter.setPin(i, (nFilterFlashState == 0 || nFilterFlashState == 2) ? HIGH : LOW);
   }
 
-  if (flashState++ > 6) {
-    flashState = 0;
+  if (nFilterFlashState++ > 6) {
+    nFilterFlashState = 0;
   }
 }
 
@@ -319,9 +318,14 @@ void bargraphNormal()
     normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_DOWN);
   }
   else if(!stateOverloaded) {
-    if (++curLevel > MAX_LEVELS) {
+    if (curLevel == MAX_LEVELS - 1) {
        curLevel = MAX_LEVELS;
        normal_bargraph_cycle.enable();
+       normal_cyclotron.enable();
+       initialised = true;
+    }
+    else if (curLevel < MAX_LEVELS) {
+       curLevel++;
     }
     normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_UP);
   }
