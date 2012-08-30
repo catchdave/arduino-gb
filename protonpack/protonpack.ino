@@ -3,13 +3,16 @@
 #include "WaveUtil.h"
 #include "WaveHC.h"
 
-WaveHC wave(Serial);  // This is the only wave (audio) object, since we will only play one at a time
-
 // Pin Definitions
 int latchPin = 8;
 int clockPin = 7; // used to be 12
 int dataPin = 9; // used to be 11
 int triggerSwitch = A5;
+
+// General config
+#define TIME_TO_COOLDOWN 4000UL
+#define MAX_LEVELS 20
+int curLevel = 0;
 
 // Shift Register config
 #define NUM_REGISTERS 7 // how many registers are in the chain
@@ -18,9 +21,9 @@ Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS);
 // Booster config
 #define BOOSTER_FIRST_PIN 0
 #define BOOSTER_LAST_PIN 14
+#define BOOSTER_DELAY_MIN 10
 #define BOOSTER_DELAY_NORMAL 80
-#define BOOSTER_DELAY_MIN 5
-#define BOOSTER_DELAY_OVERLOAD 40
+#define BOOSTER_DELAY_OVERLOADED 80
 // Booster variables
 int curBoosterPin = BOOSTER_FIRST_PIN;
 int curBoosterDelay = BOOSTER_DELAY_NORMAL;
@@ -55,16 +58,10 @@ int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 // Bargraph variables
 int primaryBargraphPin = BARGRAPH_FIRST_PIN;
 int secondaryBargraphPin = BARGRAPH_MIDDLE_PIN;
+int bargraphCyclePin = BARGRAPH_LAST_PIN;
 boolean bargraphUp = true;
 boolean bargraphWaiting = false;
 int bargraphDir = 1;
-
-
-// General config
-#define TIME_TO_OVERLOAD 6000UL
-#define TIME_TO_COOLDOWN 4000UL
-#define MAX_LEVELS 20
-int curLevel = 0;
 
 // State variables
 int isFiring = false;
@@ -79,11 +76,12 @@ TimedAction normal_cyclotron = TimedAction(CYCLOTRON_DELAY_NORMAL, cyclotronNorm
 TimedAction normal_bargraph = TimedAction(BARGRAPH_DELAY_NORMAL_DOWN, bargraphNormal);
 TimedAction normal_bargraph_cycle = TimedAction(BARGRAPH_DELAY_CYCLE, bargraphCycle);
 
-// Timed action overload
-TimedAction overload_booster = TimedAction(BOOSTER_DELAY_NORMAL, boosterOverloaded);
+// Timed action, overload
+TimedAction overload_booster = TimedAction(BOOSTER_DELAY_OVERLOADED, boosterOverloaded);
 TimedAction overload_nfilter = TimedAction(NFILTER_DELAY_OVERLOADED, nfilterOverloaded);
 TimedAction overload_bargraph = TimedAction(BARGRAPH_DELAY_OVERLOADED, bargraphOverloaded);
 
+WaveHC wave(Serial);  // This is the only wave (audio) object, since we will only play one at a time
 
 void setup()
 {
@@ -95,8 +93,7 @@ void setup()
   overload_nfilter.disable();
   overload_bargraph.disable();
   normal_bargraph_cycle.disable();
-  
- // putstring_nl("Initialising");
+
   //wave.setup();
   Serial.begin(9600);
 }
@@ -110,8 +107,8 @@ void loop()
   }
   return;
   */
-  
-  
+
+
   // Check firing
   isFiring = (digitalRead(triggerSwitch) == HIGH);
   if (!isFiring) {
@@ -124,8 +121,8 @@ void loop()
   // Overload start
   if (!stateOverloaded && isFiring && curLevel <= 0) {
     stateOverloaded = true;
+    resetAllLights();
 
-    resetAllLights(true);
     normal_booster.disable();
     normal_nfilter.disable();
     normal_bargraph.disable();
@@ -143,8 +140,8 @@ void loop()
 
   // Overload endend
   if (stateOverloaded && !isFiring && (millis() - overloadedStart) > TIME_TO_COOLDOWN) {
-    resetAllLights(false);
     stateOverloaded = false;
+    resetAllLights();
 
     normal_booster.enable();
     normal_nfilter.enable();
@@ -171,7 +168,7 @@ void loop()
   }
 }
 
-void resetAllLights(boolean overload)
+void resetAllLights()
 {
   curBoosterPin = BOOSTER_FIRST_PIN;
   boosterDir = 1;
@@ -179,8 +176,8 @@ void resetAllLights(boolean overload)
 
   curNfilterPin = NFILTER_FIRST_PIN;
   nfilterClear();
-  
-  bargraphReset(overload);
+
+  bargraphReset();
 }
 
 /*********************
@@ -304,16 +301,20 @@ void cyclotronNormal()
 /*********************
  * Bargraph Functions *
  *********************/
-int bargraphCyclePin = BARGRAPH_LAST_PIN;
+
+/**
+ * Responsible for maintaining the curLevel of overload.
+ * When curLevel >= MAX_LEVELS
+ */
 void bargraphNormal()
 {
   if (isFiring) {
-    
+
     normal_bargraph_cycle.disable();
     bargraphCyclePin = 0;
-    
+
     if (--curLevel < 0) {
-       curLevel = 0; 
+       curLevel = 0;
     }
     normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_DOWN);
   }
@@ -333,7 +334,7 @@ void bargraphNormal()
 void bargraphCycle()
 {
   int revertPin;
-  
+
   if (--bargraphCyclePin < BARGRAPH_FIRST_PIN) {
     bargraphCyclePin = BARGRAPH_LAST_PIN;
     revertPin = BARGRAPH_FIRST_PIN;
@@ -341,11 +342,11 @@ void bargraphCycle()
   else {
     revertPin = bargraphCyclePin + 1;
   }
-  
+
   if (revertPin < (BARGRAPH_FIRST_PIN + curLevel)) {
      shifter.setPin(revertPin,  HIGH);
   }
-  
+
   shifter.setPin(bargraphCyclePin,  LOW);
 }
 
@@ -353,12 +354,12 @@ void bargraphOverloaded()
 {
   if (primaryBargraphPin < BARGRAPH_FIRST_PIN) {
     bargraphUp = false;
-    
+
   }
   else if (primaryBargraphPin >= BARGRAPH_MIDDLE_PIN - 1) {
     bargraphUp = true;
   }
-  
+
   if (bargraphUp) {
     shifter.setPin(primaryBargraphPin--, HIGH);
     shifter.setPin(secondaryBargraphPin++, HIGH);
@@ -369,67 +370,19 @@ void bargraphOverloaded()
   }
 }
 
-void bargraphReset(boolean overload)
+void bargraphReset()
 {
   bargraphUp = true;
   bargraphDir = 1;
-  if (overload) {
+  if (stateOverloaded) {
     primaryBargraphPin = BARGRAPH_MIDDLE_PIN - 1;
   }
   else {
     primaryBargraphPin = BARGRAPH_FIRST_PIN;
   }
   secondaryBargraphPin = BARGRAPH_MIDDLE_PIN;
-  
+
   for (int i = BARGRAPH_FIRST_PIN; i <= BARGRAPH_LAST_PIN; i++) {
      shifter.setPin(i, LOW);
   }
 }
-
-/*
-
-if (isFiring) {
-    float remaining;
-  int parts;
-   remaining = TIME_TO_OVERLOAD - (millis() - firingStart);
-   if (remaining > 0) {
-     parts = (int) (20.0 * remaining / TIME_TO_OVERLOAD);
-   }
-   else {
-     parts = 0; 
-   }
-  }
-  
-  
-  void bargraphNormalGlow()
-{
-  // Rising glow complete, wait before we go down
-  if (primaryBargraphPin > BARGRAPH_LAST_PIN) {
-    bargraphUp = false;
-    primaryBargraphPin = BARGRAPH_LAST_PIN;
-    bargraphWaiting = true;
-
-    normal_bargraph.setInterval(BARGRAPH_GLOW_WAIT);
-    return;
-  }
-  
-  // Reset interval when returning from waiting
-  if (bargraphWaiting) {
-    bargraphWaiting = false;
-    normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_DOWN);
-  }
-  
-  if (primaryBargraphPin <= BARGRAPH_FIRST_PIN) {
-    bargraphUp = true;
-    primaryBargraphPin = BARGRAPH_FIRST_PIN;
-    normal_bargraph.setInterval(BARGRAPH_DELAY_NORMAL_UP);
-  }
-
-  if (bargraphUp) {
-    shifter.setPin(primaryBargraphPin++, HIGH);
-  }
-  else {
-    shifter.setPin(primaryBargraphPin--, LOW);
-  }
-}
-*/
