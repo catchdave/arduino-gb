@@ -13,7 +13,7 @@ int dataPin = 9; // used to be 11
 int triggerSwitch = A5;
 
 // General config
-const ulong TIME_TO_COOLDOWN = 4000UL;
+const ulong TIME_TO_COOLDOWN = 5000UL;
 const int MAX_LEVELS = 20;
 int curLevel = 0;
 
