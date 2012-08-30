@@ -31,7 +31,6 @@ Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS);
 // Booster config
 const int BOOSTER_FIRST_PIN = 0;
 const int BOOSTER_LAST_PIN = 14;
-const int BOOSTER_DELAY_MIN = 5;
 const int BOOSTER_LEVELS[MAX_LEVELS+1] = {10,10,10,15,15,15,20,20,20,20,20,20,30,30,30,30,40,40,40,40,80};
 const int BOOSTER_DELAY_INIT = BOOSTER_LEVELS[19];
 const int BOOSTER_DELAY_OVERLOADED = 80;
@@ -54,7 +53,6 @@ int nFilterFlashState = 0;
 const int CYCLOTRON_FIRST_PIN = 24;
 const int CYCLOTRON_LAST_PIN = 27;
 const int CYCLOTRON_DELAY_NORMAL = 350;
-const int CYCLOTRON_DELAY_MIN = 180;
 // Cyclotron variables
 int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 
@@ -66,7 +64,6 @@ const int BARGRAPH_DELAY_NORMAL_UP = 420;
 const int BARGRAPH_DELAY_NORMAL_DOWN = 350;
 const int BARGRAPH_DELAY_OVERLOADED = 70;
 const int BARGRAPH_DELAY_CYCLE = 70;
-const int BARGRAPH_GLOW_WAIT = 2000;
 // Bargraph variables
 int primaryBargraphPin = BARGRAPH_FIRST_PIN;
 int secondaryBargraphPin = BARGRAPH_MIDDLE_PIN;
