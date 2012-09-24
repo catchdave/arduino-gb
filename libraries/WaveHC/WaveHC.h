@@ -17,13 +17,17 @@
  * Disable if you need minimum latency for open.  Also see open by index.
  */
 #define OPTIMIZE_CONTIGUOUS 1
- /**
-  * Software volume control should be compatible with Ladyada's library.
-  * Uses shift to decrease volume by 6 dB per step. See DAC ISR in WaveHC.cpp.
-  * Must be set after call to WaveHC::create().
-  * Decreases MAX_CLOCK_RATE to 22050.
-  */
+/**
+* Software volume control should be compatible with Ladyada's library.
+* Uses shift to decrease volume by 6 dB per step. See DAC ISR in WaveHC.cpp.
+* Must be set after call to WaveHC::create().
+* Decreases MAX_CLOCK_RATE to 22050.
+*/
 #define DVOLUME 0
+/**
+ * When non-zero will print debug info to serial output
+ */
+#define DEBUG 1
 /**
  * Set behavior for files that exceed MAX_CLOCK_RATE or MAX_BYTE_RATE.
  * If RATE_ERROR_LEVEL = 2, rate too high errors are fatal.
@@ -80,8 +84,10 @@ private:
   FatReader _file;      // This holds the information for the file we're play
   bool initialised;
 
+#if DEBUG
   void sdErrorCheck();
-
+  int freeRam(void);
+#endif // DBEUG
 public:
   /** Wave file number of channels. Mono = 1, Stereo = 2 */
   uint8_t Channels;
@@ -106,7 +112,6 @@ public:
   WaveHC(HardwareSerial& serial);
 
   bool setup(void);
-  int freeRam(void);
   void playfile(char *name);
 
   uint8_t create(FatReader &f);

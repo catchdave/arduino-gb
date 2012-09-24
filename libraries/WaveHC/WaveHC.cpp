@@ -158,11 +158,12 @@ WaveHC::WaveHC(HardwareSerial& serial) : _HardSerial(serial) // Need to initiali
 
 bool WaveHC::setup()
 {
-  // set up serial port
-  _HardSerial.begin(9600);
+  _HardSerial.begin(9600); // set up serial port
 
-  putstring("Free RAM: ");       // This can help with debugging, running out of RAM is bad
-  _HardSerial.println(freeRam());      // if this is under 150 bytes it may spell trouble!
+#if DEBUG
+  putstring("Free RAM: ");        // This can help with debugging, running out of RAM is bad
+  _HardSerial.println(freeRam()); // if this is under 150 bytes it may spell trouble!
+#endif // DEBUG
 
   pinMode(2, OUTPUT);
   pinMode(3, OUTPUT);
@@ -171,7 +172,9 @@ bool WaveHC::setup()
 
   if (!_card.init()) {         //play with 8 MHz spi (default faster!)
     putstring_nl("Card init. failed!");  // Something went wrong, lets print out why
+#if DEBUG
     sdErrorCheck();
+#endif // DEBUG
     return false;
   }
 
@@ -186,7 +189,9 @@ bool WaveHC::setup()
   }
   if (part == 5) {                       // if we ended up not finding one  :(
     putstring_nl("No valid FAT partition!");
+#if DEBUG
     sdErrorCheck();
+#endif // DEBUG
     return false;
   }
 
@@ -206,21 +211,6 @@ bool WaveHC::setup()
   initialised = true;
   putstring_nl("Audio ready!");
   return true;
-}
-
-// this handy function will return the number of bytes currently free in RAM
-int WaveHC::freeRam(void)
-{
-  extern int  __bss_end;
-  extern int  *__brkval;
-  int free_memory;
-  if((int)__brkval == 0) {
-    free_memory = ((int)&free_memory) - ((int)&__bss_end);
-  }
-  else {
-    free_memory = ((int)&free_memory) - ((int)__brkval);
-  }
-  return free_memory;
 }
 
 void WaveHC::playfile(char *name)
@@ -252,6 +242,7 @@ void WaveHC::playfile(char *name)
 
 //------------------------------------------------------------------------------
 
+#if DEBUG
 /**
  * Debug helper for SD card
  */
@@ -266,6 +257,25 @@ void WaveHC::sdErrorCheck()
   putstring(", ");
   _HardSerial.println(_card.errorData(), HEX);
 }
+
+/**
+ * this handy function will return the number of bytes currently free in RAM
+ * @return Free ram
+ */
+int WaveHC::freeRam(void)
+{
+  extern int  __bss_end;
+  extern int  *__brkval;
+  int free_memory;
+  if((int)__brkval == 0) {
+    free_memory = ((int)&free_memory) - ((int)&__bss_end);
+  }
+  else {
+    free_memory = ((int)&free_memory) - ((int)__brkval);
+  }
+  return free_memory;
+}
+#endif // DEBUG
 
 /**
  * Read a wave file's metadata and initialize member variables.
