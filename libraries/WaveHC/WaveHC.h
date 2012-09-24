@@ -78,6 +78,7 @@ private:
   FatVolume _vol;    // This holds the information for the partition on the card
   FatReader _root;   // This holds the information for the filesystem on the card
   FatReader _file;      // This holds the information for the file we're play
+  bool initialised;
 
   void sdErrorCheck();
 
@@ -110,7 +111,9 @@ public:
 
   uint8_t create(FatReader &f);
   /** Return the size of the WAV file */
-  uint32_t getSize(void) {return fd->fileSize();}
+  uint32_t getSize(void) {
+    return fd->fileSize();
+  }
   uint8_t isPaused(void);
   void pause(void);
   void play(void);

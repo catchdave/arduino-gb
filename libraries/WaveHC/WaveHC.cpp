@@ -39,7 +39,8 @@ uint8_t sdstatus = 0;
 
 //------------------------------------------------------------------------------
 // timer interrupt for DAC
-ISR(TIMER1_COMPA_vect) {
+ISR(TIMER1_COMPA_vect)
+{
   if (!playing) return;
 
   if (playpos >= playend) {
@@ -124,7 +125,8 @@ ISR(TIMER1_COMPA_vect) {
 //------------------------------------------------------------------------------
 // this is the interrupt that fills the playbuffer
 
-ISR(TIMER1_COMPB_vect) {
+ISR(TIMER1_COMPB_vect)
+{
 
   // turn off calling interrupt
   TIMSK1 &= ~_BV(OCIE1B);
@@ -151,6 +153,7 @@ ISR(TIMER1_COMPB_vect) {
 WaveHC::WaveHC(HardwareSerial& serial) : _HardSerial(serial) // Need to initialise references before body
 {
   fd = 0;
+  initialised = false;
 }
 
 bool WaveHC::setup()
@@ -200,6 +203,7 @@ bool WaveHC::setup()
   }
 
   // Whew! We got past the tough parts.
+  initialised = true;
   putstring_nl("Audio ready!");
   return true;
 }
@@ -221,6 +225,11 @@ int WaveHC::freeRam(void)
 
 void WaveHC::playfile(char *name)
 {
+  if (!initialised) {
+    putstring("Ignoring play command because setup failed.");
+    return;
+  }
+
   // see if the wave object is currently doing something
   if (isplaying) { // already playing something, so stop it!
     stop(); // stop it
@@ -268,7 +277,8 @@ void WaveHC::sdErrorCheck()
  * for failure include I/O error, an invalid wave file or a wave
  *  file with features that WaveHC does not support.
  */
-uint8_t WaveHC::create(FatReader &f) {
+uint8_t WaveHC::create(FatReader &f)
+{
   // 18 byte buffer
   // can use this since Arduino and RIFF are Little Endian
   union {
@@ -374,7 +384,8 @@ uint8_t WaveHC::create(FatReader &f) {
 /**
  * Returns true if the player is paused else false.
  */
-uint8_t WaveHC::isPaused(void) {
+uint8_t WaveHC::isPaused(void)
+{
   cli();
   uint8_t rtn = isplaying && !(TIMSK1 & _BV(OCIE1A));
   sei();
@@ -384,7 +395,8 @@ uint8_t WaveHC::isPaused(void) {
 /**
  * Pause the player.
  */
-void WaveHC::pause(void) {
+void WaveHC::pause(void)
+{
   cli();
   TIMSK1 &= ~_BV(OCIE1A); //disable DAC interrupt
   sei();
@@ -399,9 +411,9 @@ void WaveHC::pause(void) {
  * Check the member variable WaveHC::isplaying to monitor the status
  * of the player.
  */
-void WaveHC::play(void) {
+void WaveHC::play(void)
+{
   // setup the interrupt as necessary
-
   int16_t read;
 
   playing = this;
@@ -443,8 +455,8 @@ void WaveHC::play(void) {
  * Not for use in applications.  Must be public so SD read ISR can access it.
  * Insures SD sectors are aligned with buffers.
  */
-int16_t WaveHC::readWaveData(uint8_t *buff, uint16_t len) {
-
+int16_t WaveHC::readWaveData(uint8_t *buff, uint16_t len)
+{
   if (remainingBytesInChunk == 0) {
     struct {
       char     id[4];
@@ -478,7 +490,8 @@ int16_t WaveHC::readWaveData(uint8_t *buff, uint16_t len) {
 }
 //------------------------------------------------------------------------------
 /** Resume a paused player. */
-void WaveHC::resume(void) {
+void WaveHC::resume(void)
+{
   cli();
   // enable DAC interrupt
   if(isplaying) TIMSK1 |= _BV(OCIE1A);
@@ -491,7 +504,8 @@ void WaveHC::resume(void) {
  * \param[in] pos seek will attempt to position the file near \a pos.
  * \a pos is the byte number from the beginning of file.
  */
-void WaveHC::seek(uint32_t pos) {
+void WaveHC::seek(uint32_t pos)
+{
   // make sure buffer fill interrupt doesn't happen
   cli();
   if (fd) {
@@ -513,7 +527,8 @@ void WaveHC::seek(uint32_t pos) {
  * \param[in] samplerate The new sample rate in samples per second.
  * No checks are done on the input parameter.
  */
-void WaveHC::setSampleRate(uint32_t samplerate) {
+void WaveHC::setSampleRate(uint32_t samplerate)
+{
   if (samplerate < 500) samplerate = 500;
   if (samplerate > 50000) samplerate = 50000;
   // from ladayada's library.
@@ -525,7 +540,8 @@ void WaveHC::setSampleRate(uint32_t samplerate) {
 }
 //------------------------------------------------------------------------------
 /** Stop the player. */
-void WaveHC::stop(void) {
+void WaveHC::stop(void)
+{
   TIMSK1 &= ~_BV(OCIE1A);   // turn off interrupt
   playing->isplaying = 0;
   playing = 0;
