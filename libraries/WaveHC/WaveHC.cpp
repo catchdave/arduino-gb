@@ -16,8 +16,6 @@
 #include <mcpDac.h>
 #include <WaveHC.h>
 #include <WaveUtil.h>
-#include <HardwareSerial.h>
-
 
 // verify program assumptions
 #if PLAYBUFFLEN != 256 && PLAYBUFFLEN != 512
@@ -54,7 +52,7 @@ ISR(TIMER1_COMPA_vect) {
 
       sdstatus = SD_FILLING;
       // interrupt to call SD reader
-	    TIMSK1 |= _BV(OCIE1B);
+      TIMSK1 |= _BV(OCIE1B);
     }
     else if (sdstatus == SD_END_FILE) {
       playing->stop();
@@ -154,7 +152,112 @@ WaveHC::WaveHC(HardwareSerial& serial) : _HardSerial(serial) // Need to initiali
 {
   fd = 0;
 }
+
+bool WaveHC::setup()
+{
+  // set up serial port
+  _HardSerial.begin(9600);
+
+  putstring("Free RAM: ");       // This can help with debugging, running out of RAM is bad
+  _HardSerial.println(freeRam());      // if this is under 150 bytes it may spell trouble!
+
+  pinMode(2, OUTPUT);
+  pinMode(3, OUTPUT);
+  pinMode(4, OUTPUT);
+  pinMode(5, OUTPUT);
+
+  if (!_card.init()) {         //play with 8 MHz spi (default faster!)
+    putstring_nl("Card init. failed!");  // Something went wrong, lets print out why
+    sdErrorCheck();
+    return false;
+  }
+
+  // enable optimize read - some cards may timeout. Disable if you're having problems
+  _card.partialBlockRead(true);
+
+// Now we will look for a FAT partition!
+  uint8_t part;
+  for (part = 0; part < 5; part++) {     // we have up to 5 slots to look in
+    if (_vol.init(_card, part))
+      break;                             // we found one, lets bail
+  }
+  if (part == 5) {                       // if we ended up not finding one  :(
+    putstring_nl("No valid FAT partition!");
+    sdErrorCheck();
+    return false;
+  }
+
+  // Lets tell the user about what we found
+  putstring("Using partition ");
+  _HardSerial.print(part, DEC);
+  putstring(", type is FAT");
+  _HardSerial.println(_vol.fatType(),DEC);     // FAT16 or FAT32?
+
+  // Try to open the root directory
+  if (!_root.openRoot(_vol)) {
+    putstring_nl("Can't open root dir!"); // Something went wrong,
+    return false;
+  }
+
+  // Whew! We got past the tough parts.
+  putstring_nl("Audio ready!");
+  return true;
+}
+
+// this handy function will return the number of bytes currently free in RAM
+int WaveHC::freeRam(void)
+{
+  extern int  __bss_end;
+  extern int  *__brkval;
+  int free_memory;
+  if((int)__brkval == 0) {
+    free_memory = ((int)&free_memory) - ((int)&__bss_end);
+  }
+  else {
+    free_memory = ((int)&free_memory) - ((int)__brkval);
+  }
+  return free_memory;
+}
+
+void WaveHC::playfile(char *name)
+{
+  // see if the wave object is currently doing something
+  if (isplaying) { // already playing something, so stop it!
+    stop(); // stop it
+  }
+  // look in the root directory and open the file
+  if (!_file.open(_root, name)) {
+    putstring("Couldn't open file ");
+    _HardSerial.println(name);
+    return;
+  }
+  // OK read the file and turn it into a wave object
+  if (!create(_file)) {
+    putstring_nl("Not a valid WAV");
+    return;
+  }
+
+  // ok time to play! start playback
+  play();
+}
+
 //------------------------------------------------------------------------------
+
+/**
+ * Debug helper for SD card
+ */
+void WaveHC::sdErrorCheck()
+{
+  if (!_card.errorCode()) {
+    return;
+  }
+
+  putstring("\n\rSD I/O error: ");
+  _HardSerial.print(_card.errorCode(), HEX);
+  putstring(", ");
+  _HardSerial.println(_card.errorData(), HEX);
+}
+
 /**
  * Read a wave file's metadata and initialize member variables.
  *
@@ -334,110 +437,6 @@ void WaveHC::play(void) {
   // Enable timer interrupt for DAC ISR
   TIMSK1 |= _BV(OCIE1A);
 }
-
-// this handy function will return the number of bytes currently free in RAM, great for debugging!
-int WaveHC::freeRam(void)
-{
-  extern int  __bss_end;
-  extern int  *__brkval;
-  int free_memory;
-  if((int)__brkval == 0) {
-    free_memory = ((int)&free_memory) - ((int)&__bss_end);
-  }
-  else {
-    free_memory = ((int)&free_memory) - ((int)__brkval);
-  }
-  return free_memory;
-}
-
-bool WaveHC::setup()
-{
-  SdReader card;    // This object holds the information for the card
-  FatVolume vol;    // This holds the information for the partition on the card
-
-  // set up serial port
-  _HardSerial.begin(9600);
-
-  putstring("Free RAM: ");       // This can help with debugging, running out of RAM is bad
-  _HardSerial.println(freeRam());      // if this is under 150 bytes it may spell trouble!
-
-  pinMode(2, OUTPUT);
-  pinMode(3, OUTPUT);
-  pinMode(4, OUTPUT);
-  pinMode(5, OUTPUT);
-
-  if (!card.init()) {         //play with 8 MHz spi (default faster!)
-    putstring_nl("Card init. failed!");  // Something went wrong, lets print out why
-    sdErrorCheck(card);
-    return false;
-  }
-
-  // enable optimize read - some cards may timeout. Disable if you're having problems
-  card.partialBlockRead(true);
-
-  // Now we will look for a FAT partition!
-  uint8_t part;
-  for (part = 0; part < 5; part++) {     // we have up to 5 slots to look in
-    if (vol.init(card, part))
-      break;                             // we found one, lets bail
-  }
-  if (part == 5) {                       // if we ended up not finding one  :(
-    putstring_nl("No valid FAT partition!");
-    sdErrorCheck(card);      // Something went wrong, lets print out why
-    return false;
-  }
-
-  // Lets tell the user about what we found
-  putstring("Using partition ");
-  _HardSerial.print(part, DEC);
-  putstring(", type is FAT");
-  _HardSerial.println(vol.fatType(),DEC);     // FAT16 or FAT32?
-
-  // Try to open the root directory
-  if (!_root.openRoot(vol)) {
-    putstring_nl("Can't open root dir!"); // Something went wrong,
-    return false;
-  }
-
-  // Whew! We got past the tough parts.
-  putstring_nl("Ready!");
-  return true;
-}
-
-void WaveHC::sdErrorCheck(SdReader card)
-{
-  if (!card.errorCode()) {
-    return;
-  }
-
-  putstring("\n\rSD I/O error: ");
-  _HardSerial.print(card.errorCode(), HEX);
-  putstring(", ");
-  _HardSerial.println(card.errorData(), HEX);
-}
-
-void WaveHC::playfile(char *name)
-{
-  // see if the wave object is currently doing something
-  if (isplaying) {// already playing something, so stop it!
-    playing->stop(); // stop it
-  }
-  // look in the root directory and open the file
-  if (!fd->open(_root, name)) {
-    putstring("Couldn't open file ");
-    _HardSerial.println(name);
-    return;
-  }
-  // OK read the file and turn it into a wave object
-  if (!playing->create(*fd)) {
-    putstring_nl("Not a valid WAV");
-    return;
-  }
-
-  // ok time to play! start playback
-  playing->play();
-}
-
 //------------------------------------------------------------------------------
 /** Read wave data.
  *

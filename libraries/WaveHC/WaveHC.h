@@ -4,10 +4,9 @@
 */
 #ifndef WaveHC_h
 #define WaveHC_h
-#include <Arduino.h>
 #include <FatReader.h>
+#include <Arduino.h>
 #include <HardwareSerial.h>
- 
 /**
  * \file
  * WaveHC class
@@ -71,10 +70,16 @@
  * on SD and SDHC flash memory cards.
  *
  */
-class WaveHC {
+class WaveHC
+{
 private:
-  void sdErrorCheck(SdReader card);
+  HardwareSerial& _HardSerial;
+  SdReader _card;    // This object holds the information for the card
+  FatVolume _vol;    // This holds the information for the partition on the card
   FatReader _root;   // This holds the information for the filesystem on the card
+  FatReader _file;      // This holds the information for the file we're play
+
+  void sdErrorCheck();
 
 public:
   /** Wave file number of channels. Mono = 1, Stereo = 2 */
@@ -98,7 +103,10 @@ public:
   FatReader* fd;
 
   WaveHC(HardwareSerial& serial);
-  HardwareSerial& _HardSerial;
+
+  bool setup(void);
+  int freeRam(void);
+  void playfile(char *name);
 
   uint8_t create(FatReader &f);
   /** Return the size of the WAV file */
@@ -111,10 +119,6 @@ public:
   void seek(uint32_t pos);
   void setSampleRate(uint32_t samplerate);
   void stop(void);
-
-  int freeRam(void);
-  bool setup(void);
-  void playfile(char *name);
 };
 
 #endif //WaveHC_h
