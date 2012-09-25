@@ -7,14 +7,17 @@
 #define ulong unsigned long
 
 // Pin Definitions
-int latchPin = 8;
-int clockPin = 7; // used to be 12
-int dataPin = 9; // used to be 11
+int latchPin = 8; // (green)
+int clockPin = 7; // used to be 12 (orange)
+int dataPin = 9; // used to be 11 (blue)
 int triggerSwitch = A5;
+
+int themeSwitch = A4;
+bool themePlaying = false;
+int curTheme = 2;
 
 // General config
 const ulong TIME_TO_COOLDOWN = 5000UL;
-const int MAX_LEVELS = 20;
 int curLevel = 0;
 
 // State variables
@@ -27,17 +30,6 @@ boolean initialised = false;
 // Shift Register config
 const int NUM_REGISTERS = 7; // how many registers are in the chain
 Shifter shifter(dataPin, latchPin, clockPin, NUM_REGISTERS);
-
-// Booster config
-const int BOOSTER_FIRST_PIN = 0;
-const int BOOSTER_LAST_PIN = 14;
-const int BOOSTER_LEVELS[MAX_LEVELS+1] = {10,10,10,15,15,15,20,20,20,20,20,20,30,30,30,30,40,40,40,40,80};
-const int BOOSTER_DELAY_INIT = BOOSTER_LEVELS[19];
-const int BOOSTER_DELAY_OVERLOADED = 80;
-// Booster variables
-int curBoosterPin = BOOSTER_FIRST_PIN;
-int curBoosterDelay = BOOSTER_DELAY_INIT;
-int boosterDir = 1;
 
 // N-Filter Config
 const int NFILTER_FIRST_PIN = 15;
@@ -58,12 +50,13 @@ int curCyclotronPin = CYCLOTRON_FIRST_PIN;
 
 // Gun Bargraph
 const int BARGRAPH_FIRST_PIN = 28;
-const int BARGRAPH_LAST_PIN = 47;
-const int BARGRAPH_MIDDLE_PIN = 38;
-const int BARGRAPH_DELAY_NORMAL_UP = 420;
-const int BARGRAPH_DELAY_NORMAL_DOWN = 350;
+const int BARGRAPH_LAST_PIN = 37;
+const int BARGRAPH_MIDDLE_PIN = 33;
+const int BARGRAPH_DELAY_NORMAL_UP = 480;
+const int BARGRAPH_DELAY_NORMAL_DOWN = 400;
 const int BARGRAPH_DELAY_OVERLOADED = 70;
-const int BARGRAPH_DELAY_CYCLE = 70;
+const int BARGRAPH_DELAY_CYCLE = 100;
+const int MAX_LEVELS = 1 + BARGRAPH_LAST_PIN - BARGRAPH_FIRST_PIN;
 // Bargraph variables
 int primaryBargraphPin = BARGRAPH_FIRST_PIN;
 int secondaryBargraphPin = BARGRAPH_MIDDLE_PIN;
@@ -71,6 +64,18 @@ int bargraphCyclePin = BARGRAPH_LAST_PIN;
 boolean bargraphUp = true;
 boolean bargraphWaiting = false;
 int bargraphDir = 1;
+
+// Booster config
+const int BOOSTER_FIRST_PIN = 0;
+const int BOOSTER_LAST_PIN = 14;
+//const int BOOSTER_LEVELS[MAX_LEVELS+1] = {10,10,10,10,10,15,15,15,15,15,15,15,20,20,30,30,30,40,40,40,80};
+const int BOOSTER_LEVELS[MAX_LEVELS+1] = {10,10,15,15,15,20,20,30,30,40,80};
+const int BOOSTER_DELAY_INIT = BOOSTER_LEVELS[MAX_LEVELS-1];
+const int BOOSTER_DELAY_OVERLOADED = 80;
+// Booster variables
+int curBoosterPin = BOOSTER_FIRST_PIN;
+int curBoosterDelay = BOOSTER_DELAY_INIT;
+int boosterDir = 1;
 
 // Timed action, normal
 TimedAction normal_booster = TimedAction(BOOSTER_DELAY_INIT, boosterNormal);
@@ -88,9 +93,11 @@ WaveHC wave(Serial);  // This is the only wave (audio) object, since we will onl
 
 void setup()
 {
-  shifter.clear(); //set all pins on the shift register chain to LOW
+
+  shifter.clear(); // set all pins on the shift register chain to LOW
   shifter.write();
   pinMode(triggerSwitch, INPUT);
+  pinMode(themeSwitch, INPUT);
 
   overload_booster.disable();
   overload_nfilter.disable();
@@ -99,32 +106,58 @@ void setup()
   normal_cyclotron.disable(); // enabled when initialised
   normal_bargraph_cycle.disable(); // enbled when bargraph full
 
-  //wave.setup();
-  Serial.begin(9600);
+  wave.setup();
+  wave.playfile("p_start.wav"); // plays only once on first load
 }
 
 // Main loop
 void loop()
 {
-  /*
-  if (!wave.isplaying) {
-    wave.playfile("theme1.wav");
-  }
-  return;
-  */
-
-
+  bool anythingPlaying = wave.isplaying;
+  bool canChangeSoundState = !wave.isplaying || themePlaying;
+  bool realPlaying = wave.isplaying && !themePlaying;
+  
   // Check firing
   isFiring = initialised && (digitalRead(triggerSwitch) == HIGH);
   if (!isFiring) {
-   firingStart = 0;
+    if (!stateOverloaded && firingStart > 0) {
+      wave.playfile("p_stop.wav");
+    }
+    firingStart = 0;
   }
   else if (firingStart == 0) { // We just started firing
     firingStart = millis();
+    if (canChangeSoundState && !stateOverloaded) {
+      wave.playfile("f_clean.wav");
+      themePlaying = false;
+    }
+  }
+  
+  bool themePlay = digitalRead(themeSwitch) == HIGH;
+  if (!anythingPlaying && themePlay) {
+
+    String filename = "theme";
+    filename += curTheme;
+    filename += ".wav";
+    char charBuf[filename.length()+1];
+    filename.toCharArray(charBuf, filename.length()+1);
+    wave.playfile(charBuf);
+
+    themePlaying = true;
+  }
+  if (themePlaying && !themePlay) {
+     wave.stop();
+     themePlaying = false;
+     
+     // Switch themes
+     curTheme = (curTheme == 2) ? 1 : 2;
   }
 
   // Overload start
   if (!stateOverloaded && isFiring && curLevel <= 0) {
+    wave.playfile("p_stop.wav");
+    themePlaying = false;
+
     stateOverloaded = true;
     resetAllLights();
 
