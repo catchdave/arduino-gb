@@ -221,8 +221,11 @@ void WaveHC::playfile(char *name)
   }
 
   // see if the wave object is currently doing something
-  if (isplaying) { // already playing something, so stop it!
-    stop(); // stop it
+  if (isplaying) { // already playing something
+    if (!strcasecmp(_cur_file, name)) {
+      return; // file is already playing - do nothing
+    }
+    stop(); // stop it old file
   }
   // look in the root directory and open the file
   if (!_file.open(_root, name)) {
@@ -237,6 +240,7 @@ void WaveHC::playfile(char *name)
   }
 
   // ok time to play! start playback
+  _cur_file = name;
   play();
 }
 

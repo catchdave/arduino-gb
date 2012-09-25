@@ -83,6 +83,7 @@ private:
   FatReader _root;   // This holds the information for the filesystem on the card
   FatReader _file;      // This holds the information for the file we're play
   bool initialised;
+  char *_cur_file;
 
 #if DEBUG
   void sdErrorCheck();
