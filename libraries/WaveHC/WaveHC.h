@@ -27,7 +27,7 @@
 /**
  * When non-zero will print debug info to serial output
  */
-#define DEBUG 1
+#define DEBUG 0
 /**
  * Set behavior for files that exceed MAX_CLOCK_RATE or MAX_BYTE_RATE.
  * If RATE_ERROR_LEVEL = 2, rate too high errors are fatal.
